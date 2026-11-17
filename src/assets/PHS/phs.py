@@ -79,8 +79,7 @@ class Reservoir_Asset(Stock_Asset_STEVFNs):
  
     def build_cost(self):
         storage_capital = cp.sum(self.cost_fun_params["sizing_constant"] @ self.new_capacity)
-        derived_power_capacity = self.new_capacity * self.inv_hours_storage
-        power_capital = cp.sum(self.cost_fun_params["power_sizing_constant"] @ derived_power_capacity)
+        power_capital = cp.sum(self.cost_fun_params["power_sizing_constant"] @ self.new_capacity)
         self.cost = storage_capital + power_capital
         return
  
@@ -124,13 +123,15 @@ class Reservoir_Asset(Stock_Asset_STEVFNs):
         return
  
     def _update_parameters(self):
-        self.inv_hours_storage.value = 1.0 / float(self.parameters_df["hours_storage"])
+        inv_hours = 1.0 / float(self.parameters_df["hours_storage"])
+        self.inv_hours_storage.value = inv_hours
  
         storage_vec = np.full(self.num_periods, float(self.parameters_df["storage_sizing_constant"]))
         self.cost_fun_params["sizing_constant"].value = self._compute_annuity_matrix(storage_vec)
- 
+        # power sizing constant in USD/GW; multiply by the inv_hours to give 
+        # USD/GWh of energy capacity so it directly acts on new_capacity and is DPP compliant
         power_vec = np.full(self.num_periods, float(self.parameters_df["power_sizing_constant"]))
-        self.cost_fun_params["power_sizing_constant"].value = self._compute_annuity_matrix(power_vec)
+        self.cost_fun_params["power_sizing_constant"].value = self._compute_annuity_matrix(power_vec) * inv_hours
  
         self._update_new_capacity_decom_mask()
         self._update_existing_capacity_vec()
@@ -217,45 +218,7 @@ class _PHS_Flow_Component(Asset_STEVFNs):
                 self.target_node_location, self.capacity_node_type, p))
             edge.flow = self.reservoir.power_capacity(p) - cp.max(period_flows)
         return
- 
-    def _build_ramp_edges(self):
-        """Ramp cap = derived power capacity[p] * inv_hours_storage --
-        i.e. the plant can swing its full derived capacity within
-        hours_storage hours. No independent ramp_rate parameter."""
-        for t in range(self.number_of_edges - 1):
-            p = self._period_index_for_edge(t + 1)
-            ramp_cap = self.reservoir.power_capacity(p) * self.reservoir.inv_hours_storage
- 
-            pos_edge = Edge_STEVFNs()
-            self.edges += [pos_edge]
-            pos_edge.attach_target_node(self.network.extract_node(
-                self.target_node_location, self.ramp_node_type_pos, self.target_node_times[t + 1]))
-            pos_edge.flow = ramp_cap - (self.flows[t + 1] - self.flows[t])
- 
-            neg_edge = Edge_STEVFNs()
-            self.edges += [neg_edge]
-            neg_edge.attach_target_node(self.network.extract_node(
-                self.target_node_location, self.ramp_node_type_neg, self.target_node_times[t + 1]))
-            neg_edge.flow = ramp_cap - (self.flows[t] - self.flows[t + 1])
- 
-        if self.number_of_edges >= 2:
-            t = self.number_of_edges - 1
-            p = self._period_index_for_edge(0)
-            ramp_cap = self.reservoir.power_capacity(p) * self.reservoir.inv_hours_storage
- 
-            pos_edge = Edge_STEVFNs()
-            self.edges += [pos_edge]
-            pos_edge.attach_target_node(self.network.extract_node(
-                self.target_node_location, self.ramp_node_type_pos, self.target_node_times[0]))
-            pos_edge.flow = ramp_cap - (self.flows[0] - self.flows[t])
- 
-            neg_edge = Edge_STEVFNs()
-            self.edges += [neg_edge]
-            neg_edge.attach_target_node(self.network.extract_node(
-                self.target_node_location, self.ramp_node_type_neg, self.target_node_times[0]))
-            neg_edge.flow = ramp_cap - (self.flows[t] - self.flows[0])
-        return
- 
+
     def build_cost(self):
         self.cost = cp.sum(cp.multiply(self.cost_fun_params["usage_constant"], self.flows))
         return
@@ -344,7 +307,6 @@ class Pumping_Asset(_PHS_Flow_Component):
         self.edges = []
         for edge_number in range(self.number_of_edges):
             self.build_edge(edge_number)
-        self._build_ramp_edges()
         self._build_capacity_limit_edges()
         return
  
@@ -383,7 +345,6 @@ class Turbine_Asset(_PHS_Flow_Component):
         self.edges = []
         for edge_number in range(self.number_of_edges):
             self.build_edge(edge_number)
-        self._build_ramp_edges()
         self._build_capacity_limit_edges()
         return
  

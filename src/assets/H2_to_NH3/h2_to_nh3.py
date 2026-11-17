@@ -28,13 +28,10 @@ class H2_to_NH3_Asset(Stock_Asset_STEVFNs):
     def conversion_fun(flows, params):
         """
         Convert H2 mass -> NH3 mass using stoichiometry and HB process conversion efficiency.
-        params expects:
-            - 'conversion_factor_stoich' : NH3_per_H2_mass (tonnes NH3 per tonne H2)
-            - 'conversion_factor_yield' : fraction (0-1) capturing overall conversion assuming recycling H2 and N2 into the reactor
+        _update_parameters() method combines both input factors inot one conversion factor
+        outside of CVXPY
         """
-        conversion_factor_stoich = params["conversion_factor_stoich"]
-        conversion_factor_yield = params["conversion_factor_yield"]
-        return flows * conversion_factor_stoich * conversion_factor_yield
+        return params["conversion_factor"] * flows
     
     @staticmethod
     def conversion_fun_2(flows, params):
@@ -47,11 +44,10 @@ class H2_to_NH3_Asset(Stock_Asset_STEVFNs):
     
     def __init__(self):
         super().__init__()
+        # Conversion factor encompasses both yield and stoichiometric conversions
         self.conversion_fun_params = {
-                    "conversion_factor_stoich": cp.Parameter(nonneg=True,
-                                                             name=f"conversion_factor_stoich_{self.asset_name}"),
-                    "conversion_factor_yield": cp.Parameter(nonneg=True,
-                                                            name=f"conversion_factor_yield_{self.asset_name}") # process efficiency
+                    "conversion_factor": cp.Parameter(nonneg=True,
+                                                             name=f"conversion_factor_{self.asset_name}"),
                 }
         self.conversion_fun_params_2 = {
                     "electricity_intensity": cp.Parameter(nonneg=True,
@@ -87,10 +83,8 @@ class H2_to_NH3_Asset(Stock_Asset_STEVFNs):
                                                                 name=f"terminal_charge_{self.asset_name}")}
 
         self.conversion_fun_params = {
-                    "conversion_factor_stoich": cp.Parameter(nonneg=True,
-                                                             name=f"conversion_factor_stoich_{self.asset_name}"),
-                    "conversion_factor_yield": cp.Parameter(nonneg=True,
-                                                            name=f"conversion_factor_yield_{self.asset_name}") # process efficiency
+                    "conversion_factor": cp.Parameter(nonneg=True,
+                                                             name=f"conversion_factor_{self.asset_name}"),
                 }
         self.conversion_fun_params_2 = {
                     "electricity_intensity": cp.Parameter(nonneg=True,
@@ -131,7 +125,7 @@ class H2_to_NH3_Asset(Stock_Asset_STEVFNs):
         self.edges.append(edge)
         edge.attach_source_node(self.network.extract_node(
             self.source_node_location, self.el_node_type, edge_number))
-        edge.flow = self.flows
+        edge.flow = self.flows[edge_number]
         edge.conversion_fun = self.conversion_fun_2
         edge.conversion_fun_params = self.conversion_fun_params_2
         return
@@ -168,8 +162,10 @@ class H2_to_NH3_Asset(Stock_Asset_STEVFNs):
         return np.full(self.num_periods, baseline_capex)
 
     def _update_parameters(self):
-        self.conversion_fun_params["conversion_factor_stoich"].value = float(self.parameters_df["conversion_factor_stoich"])
-        self.conversion_fun_params["conversion_factor_yield"].value = float(self.parameters_df["conversion_factor_yield"])
+        # Combine stoichiometric and yield conversions into one conversion parameter
+        stoich = float(self.parameters_df["conversion_factor_stoich"])
+        yld = float(self.parameters_df["conversion_factor_yield"])
+        self.conversion_fun_params["conversion_factor"].value = stoich * yld
         self.conversion_fun_params_2["electricity_intensity"].value = float(self.parameters_df["electricity_intensity"])
         self._update_usage_constant()
 

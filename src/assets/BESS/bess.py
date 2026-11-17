@@ -62,7 +62,7 @@ class BESS_Asset(Stock_Asset_STEVFNs):
         }
         self.conversion_fun_params = {
             "charge_efficiency": cp.Parameter(nonneg=True, name=f"charge_eff_{self.asset_name}"),
-            "discharge_efficiency": cp.Parameter(nonneg=True, name=f"discharge_eff_{self.asset_name}"),
+            "inv_discharge_efficiency": cp.Parameter(nonneg=True, name=f"inv_discharge_eff_{self.asset_name}"),
         }
         # per-edge retention = (1 - self_discharge_rate) ** gap_hours[t], one entry
         # per SOC continuity edge (number_of_edges - 1 of them, see _build_soc_edges)
@@ -120,7 +120,7 @@ class BESS_Asset(Stock_Asset_STEVFNs):
             discharge_edge.attach_source_node(soc_node)
             discharge_edge.attach_target_node(self.network.extract_node(
                 self.el_node_location, "EL", time))
-            discharge_edge.flow = self.discharge_flow[t] / self.conversion_fun_params["discharge_efficiency"]
+            discharge_edge.flow = self.discharge_flow[t] * self.conversion_fun_params["inv_discharge_efficiency"]
         return
 
     def _build_soc_edges(self):
@@ -136,8 +136,8 @@ class BESS_Asset(Stock_Asset_STEVFNs):
         self._soc_edges = []
         self._jump_edge_indices = []
         charge_eff = self.conversion_fun_params["charge_efficiency"]
-        discharge_eff = self.conversion_fun_params["discharge_efficiency"]
-        self._net_rate = charge_eff * self.charge_flow - self.discharge_flow / discharge_eff
+        inv_discharge_eff = self.conversion_fun_params["inv_discharge_efficiency"]
+        self._net_rate = charge_eff * self.charge_flow - inv_discharge_eff * self.discharge_flow
 
         for t in range(self.number_of_edges - 1):
             gap = self.soc_gap_hours[t]
@@ -221,7 +221,7 @@ class BESS_Asset(Stock_Asset_STEVFNs):
 
     def _update_parameters(self):
         self.conversion_fun_params["charge_efficiency"].value = float(self.parameters_df["charge_efficiency"])
-        self.conversion_fun_params["discharge_efficiency"].value = float(self.parameters_df["discharge_efficiency"])
+        self.conversion_fun_params["inv_discharge_efficiency"].value = 1.0 / float(self.parameters_df["discharge_efficiency"])
         self._update_soc_retention()
         self._update_usage_constant()
 

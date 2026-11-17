@@ -27,8 +27,7 @@ class CEM_Production_EL_Asset(Stock_Asset_STEVFNs):
         """Process (calcination) CO2e per unit cement produced
         (MtCO2/Mt cement)."""
         process_emissions_factor = params["process_emissions_factor"]
-        clinker_to_cement_ratio = params["clinker_to_cement_ratio"] # Mt clinker/Mt cement
-        return (-process_emissions_factor * clinker_to_cement_ratio) * flows
+        return -process_emissions_factor * flows
 
     @staticmethod
     def electricity_fun(flows, params):
@@ -41,9 +40,7 @@ class CEM_Production_EL_Asset(Stock_Asset_STEVFNs):
 
         self.process_emissions_fun_params = {
             "process_emissions_factor": cp.Parameter(nonneg=True,
-                                                    name=f"process_emissions_factor_{self.asset_name}"),
-            "clinker_to_cement_ratio": cp.Parameter(nonneg=True,
-                                                    name=f"clinker_to_cement_ratio_{self.asset_name}"),                                           }
+                                                    name=f"process_emissions_factor_{self.asset_name}"),                                       }
         self.electricity_fun_params = {
             "electricity_intensity": cp.Parameter(nonneg=True, name=f"electricity_intensity_{self.asset_name}")}
         return
@@ -296,10 +293,10 @@ class CEM_Production_EL_Asset(Stock_Asset_STEVFNs):
         return np.full(self.num_periods, baseline_capex)
 
     def _update_parameters(self):
-        self.process_emissions_fun_params["process_emissions_factor"].value = \
-                    float(self.parameters_df["process_emissions_factor"])
-        self.process_emissions_fun_params["clinker_to_cement_ratio"].value = \
-                    float(self.parameters_df["clinker_to_cement_ratio"])
+        # Combine input data for process emissions and clinker to cement ratio in one parameter for DPP
+        self.process_emissions_fun_params["process_emissions_factor"].value = (
+            float(self.parameters_df["process_emissions_factor"]) *
+            float(self.parameters_df["clinker_to_cement_ratio"]))
         self.electricity_fun_params["electricity_intensity"].value = \
             float(self.parameters_df["electricity_intensity"])
         self._update_usage_constant()
