@@ -197,8 +197,15 @@ class Stock_Asset_STEVFNs(Asset_STEVFNs):
         self.cost_fun_params["terminal_charge"].value = terminal_charge_vec
         return
 
+    def _existing_capacity_value(self):
+        """Pre-model existing capacity in own capacity units
+        Subclasses where parameters csv files use different units 
+        override this and convert
+        """
+        return float(self.parameters_df["existing_capacity"])
+
     def _update_existing_capacity_vec(self):
-        existing_capacity = float(self.parameters_df["existing_capacity"])
+        existing_capacity = self._existing_capacity_value()
         if self.decommission_mode == "decay_rate":
             decay_rate = float(self.parameters_df["existing_capacity_decay_rate"])
             retention = (1 - decay_rate) ** np.arange(self.num_periods)
@@ -229,19 +236,25 @@ class Stock_Asset_STEVFNs(Asset_STEVFNs):
         return period_retention
 
     def get_new_capacity(self):
+        """New installed capacity at each period
+        """
         return None if self.new_capacity.value is None else np.array(self.new_capacity.value)
 
     def get_operating_stock(self):
+        """Total operating capacity at each period
+        """
         return None if self.carryover_out.value is None else np.array(self.carryover_out.value)
 
     def size(self):
         """
         Overrides Base_Assets.py self.size definition for new installed capacity
         """
-        return self.new_capacity.value
+        return self.get_new_capacity()
 
     def asset_size(self):
-        return self.new_capacity.value
+        """Overrides Base_Assets.py self.size definition for new installed capacity
+        """
+        return self.get_new_capacity()
 
     def get_period_costs(self):
         """Generic per-period average annualised cost for any Stock_Asset_STEVFNs
@@ -249,6 +262,7 @@ class Stock_Asset_STEVFNs(Asset_STEVFNs):
         across every cohort k still within its lifetime + any usage/fuel
         cost incurred in period p), averaged over the number of modelled
         years actually falling in that period.
+        Terminal charge is not included in these reported costs
         """
         M = self.cost_fun_params["sizing_constant"].value
         new_capacity = self.new_capacity.value

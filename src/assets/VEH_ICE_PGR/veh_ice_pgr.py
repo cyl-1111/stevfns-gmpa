@@ -14,6 +14,10 @@ class VEH_ICE_PGR_Asset(Base_Vehicle_Asset_STEVFNs):
     source_node_type = "NULL"
     target_node_type = "PGR" # Passenger demand node
     target_node_type_co2 = "CO2_Budget"
+    stock_node_type = "VEH_ICE_PGR_Stock"
+    capacity_node_type = "VEH_ICE_PGR_Capacity"
+    capacity_unit = "mtkm"
+    demand_unit = "mtkm"
     period = 1
     transport_time = 0
     
@@ -38,6 +42,7 @@ class VEH_ICE_PGR_Asset(Base_Vehicle_Asset_STEVFNs):
     def build_edges(self):
         super().build_edges()
         self.emissions_edges = []
+        self._build_demand_edges()
         for p in range(self.num_periods):
             self._build_emissions_edge_for_period(p)
         return
@@ -52,8 +57,6 @@ class VEH_ICE_PGR_Asset(Base_Vehicle_Asset_STEVFNs):
         edge = Edge_STEVFNs()
         self.edges.append(edge)
         self.emissions_edges.append(edge)
-        edge.attach_source_node(self.network.extract_node(
-            self.source_node_location, self.source_node_type, period_number))
         edge.attach_target_node(self.network.extract_node(
             self.target_node_location_2, self.target_node_type_co2, period_number))
         edge.flow = period_emissions_sum

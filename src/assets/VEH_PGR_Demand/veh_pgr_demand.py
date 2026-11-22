@@ -11,6 +11,7 @@ from ...network import Edge_STEVFNs
 class VEH_PGR_Demand_Asset(Asset_STEVFNs):
     """
     Class of Passenger Demand (vehicles)
+    Demand units: mpkm/yr
     """
     asset_name = "VEH_PGR_Demand"
     node_type = "PGR"
@@ -27,11 +28,13 @@ class VEH_PGR_Demand_Asset(Asset_STEVFNs):
         self.num_years = int(self.network.system_parameters_df.loc["project_life", "value"] / 8760)
         self.source_node_times = np.arange(0, self.num_years, self.period) # create annual nodes
         self.number_of_edges = len(self.source_node_times)
+        self.source_node_location = self.node_location # for results lookup
+        self.target_node_location = self.node_location
         self.flows = cp.Parameter(shape=(self.num_years,), nonneg=True,
                                     name=f"vehicle_freight_demand_{self.asset_name}")
         return
     
-    def build_costs(self):
+    def build_cost(self):
         self.cost = cp.Constant(0)
         return
     
@@ -73,11 +76,11 @@ class VEH_PGR_Demand_Asset(Asset_STEVFNs):
                     f"expected {self.num_years} (one per year of project_life)."
                 )
             return values
-
-        # If single demand value (float) is provided, treat as a 
-        # constant scalar demand, same value every year
-        constant_demand = float(trajectory_value)
-        return np.full(self.num_years, constant_demand)
+        else:
+            # If single demand value (float) is provided, treat as a 
+            # constant scalar demand, same value every year
+            constant_demand = float(trajectory_value)
+            return np.full(self.num_years, constant_demand)
 
     def _load_parameters_df(self, asset_type):
         super()._load_parameters_df(asset_type)
@@ -85,3 +88,6 @@ class VEH_PGR_Demand_Asset(Asset_STEVFNs):
     def _update_parameters(self):
         self.flows.value = self._load_demand_trajectory()
         return
+
+    def asset_size(self):
+        return self.flows.value

@@ -11,7 +11,8 @@ from ...network import Edge_STEVFNs
 class VEH_FRT_Demand_Asset(Asset_STEVFNs):
     """
     Class of Freight Demand (road vehicles)
-    Annual FRT emand node for temporal pathways
+    Annual FRT demand node for temporal pathways
+    Demand units: mtkm/yr
     """
     asset_name = "VEH_FRT_Demand"
     node_type = "FRT"
@@ -28,11 +29,13 @@ class VEH_FRT_Demand_Asset(Asset_STEVFNs):
         self.num_years = int(self.network.system_parameters_df.loc["project_life", "value"] / 8760)
         self.source_node_times = np.arange(0, self.num_years, self.period) # create annual nodes
         self.number_of_edges = len(self.source_node_times)
+        self.source_node_location = self.node_location # for results lookup
+        self.target_node_location = self.node_location
         self.flows = cp.Parameter(shape=(self.num_years,), nonneg=True,
                                   name=f"vehicle_freight_demand_{self.asset_name}")
         return
     
-    def build_costs(self):
+    def build_cost(self):
         self.cost = cp.Constant(0)
         return
     
@@ -86,3 +89,6 @@ class VEH_FRT_Demand_Asset(Asset_STEVFNs):
     def _update_parameters(self):
         self.flows.value = self._load_demand_trajectory()
         return
+
+    def asset_size(self):
+        return self.flows.value
